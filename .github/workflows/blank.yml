@@ -1,0 +1,71 @@
+name: Validate QA
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the main branch
+  pull_request:
+    branches: [ stage ]
+    types: [opened, reopened, synchronize]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+
+      - name: Dump GitHub context
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+        run: echo "$GITHUB_CONTEXT"
+
+      # Install Salesforce CLI
+      - name: Install SFDX
+        run: |
+          export NODE_OPTIONS=--max_old_space_size=4096
+          echo "Before: ${{ github.event.before }}"
+          npm install sfdx-cli --global
+          echo y|sfdx plugins:install sfdx-git-delta@4.10.0
+          echo y|sfdx plugins:install mrumschlag1/sfdx-profile-splitter
+          echo y|sfdx plugins:install sfdmu
+
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - name: Check out repo
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 2 
+        
+      # Authorize Salesforce Org
+      - name: authorize salesforce
+        uses: sfdx-actions/setup-sfdx@v1
+        with:
+          sfdx-auth-url: ${{ secrets.VALIDATION_ORG }}
+        
+       # Run Script
+      - name: Generate Package
+        run: |
+          mkdir output
+          sfdx sgd:source:delta --from "HEAD^" --generate-delta
+          sfdx config:set defaultusername=mrumschlag@nvidia.com.nvcrd
+          chmod +x ${{ github.workspace }}/.github/workflows/destructivescheck.sh
+
+      - name: Merge Profiles
+        run: |
+          sfdx metadata:profiles:merge -i output/force-app/main/default/profiles -o output/force-app/main/default/profiles -d
+
+      - name: Validate Destructives
+        shell: bash
+        run: ${{ github.workspace }}/.github/workflows/destructivescheck.sh mrumschlag@nvidia.com.nvcrd
+
+      - name: Validate
+        run: sfdx force:source:deploy -p output/force-app --checkonly   
+
+
+       
+  
