@@ -32,7 +32,6 @@ jobs:
           echo "Before: ${{ github.event.before }}"
           npm install sfdx-cli --global
           echo y|sfdx plugins:install sfdx-git-delta@4.10.0
-          echo y|sfdx plugins:install mrumschlag1/sfdx-profile-splitter
           echo y|sfdx plugins:install sfdmu
 
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -55,14 +54,7 @@ jobs:
           sfdx config:set defaultusername=mrumschlag@nvidia.com.nvcrd
           chmod +x ${{ github.workspace }}/.github/workflows/destructivescheck.sh
 
-      - name: Merge Profiles
-        run: |
-          sfdx metadata:profiles:merge -i output/force-app/main/default/profiles -o output/force-app/main/default/profiles -d
-
-      - name: Validate Destructives
-        shell: bash
-        run: ${{ github.workspace }}/.github/workflows/destructivescheck.sh mrumschlag@nvidia.com.nvcrd
-
+     
       - name: Validate
         run: sfdx force:source:deploy -p output/force-app --checkonly   
 
